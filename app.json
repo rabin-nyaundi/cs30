@@ -13,6 +13,7 @@
       "bundleIdentifier": "com.rabinnyaundi.posprintdemo"
     },
     "android": {
+      "modules": ["com.rabinnyaundi.posprintdemo.CS30PrinterModule"],
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.BLUETOOTH_SCAN",

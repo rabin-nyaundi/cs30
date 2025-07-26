@@ -1,4 +1,4 @@
-import CS30Printer from "../native/CS30Printer"
+import CS30Printer from "../native/CS30Printer";
 
 interface PrintData {
   receiptData: {
@@ -32,13 +32,16 @@ export class SmartPOSPrinter {
   static async initializeSDK(): Promise<boolean> {
     try {
       if (!CS30Printer) {
-        console.error("CS30Printer module not found")
-        return false
+        console.error("CS30Printer module not found");
+        return false;
       }
-      return await CS30Printer.initializePrinter()
+      console.log("Initializing CS30Printer SDK...");
+      const result = await CS30Printer.initializePrinter();
+      console.log("SDK initialization result:", result);
+      return result;
     } catch (error) {
-      console.error("Failed to initialize SmartPOS SDK:", error)
-      return false
+      console.error("Failed to initialize SmartPOS SDK:", error);
+      return false;
     }
   }
 
@@ -48,13 +51,16 @@ export class SmartPOSPrinter {
   static async getPrinterStatus(): Promise<number> {
     try {
       if (!CS30Printer) {
-        console.error("CS30Printer module not found")
-        return -1
+        console.error("CS30Printer module not found");
+        return -1;
       }
-      return await CS30Printer.getPrinterStatus()
+      console.log("Getting printer status...");
+      const status = await CS30Printer.getPrinterStatus();
+      console.log("Printer status:", status);
+      return status;
     } catch (error) {
-      console.error("Failed to get printer status:", error)
-      return -1
+      console.error("Failed to get printer status:", error);
+      return -1;
     }
   }
 
@@ -64,17 +70,20 @@ export class SmartPOSPrinter {
   static async printReceipt(data: PrintData): Promise<boolean> {
     try {
       if (!CS30Printer) {
-        console.error("CS30Printer module not found")
-        return false
+        console.error("CS30Printer module not found");
+        return false;
       }
 
-      const receiptContent = this.formatReceiptContent(data)
-      console.log("Printing receipt content:", receiptContent)
+      console.log("Starting receipt print...");
+      const receiptContent = this.formatReceiptContent(data);
+      console.log("Printing receipt content:", receiptContent);
 
-      return await CS30Printer.printText(receiptContent)
+      const result = await CS30Printer.printText(receiptContent);
+      console.log("Print result:", result);
+      return result;
     } catch (error) {
-      console.error("Print error:", error)
-      throw error
+      console.error("Print error:", error);
+      throw error;
     }
   }
 
@@ -84,13 +93,16 @@ export class SmartPOSPrinter {
   static async printText(text: string): Promise<boolean> {
     try {
       if (!CS30Printer) {
-        console.error("CS30Printer module not found")
-        return false
+        console.error("CS30Printer module not found");
+        return false;
       }
-      return await CS30Printer.printText(text)
+      console.log("Printing text:", text);
+      const result = await CS30Printer.printText(text);
+      console.log("Print text result:", result);
+      return result;
     } catch (error) {
-      console.error("Print text error:", error)
-      throw error
+      console.error("Print text error:", error);
+      throw error;
     }
   }
 

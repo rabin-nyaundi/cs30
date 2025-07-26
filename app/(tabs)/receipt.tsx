@@ -4,7 +4,9 @@ import { ThemedText } from "@/components/ThemedText"
 import { ThemedView } from "@/components/ThemedView"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Alert, StyleSheet, TouchableOpacity, ScrollView, View } from "react-native"
-import { SmartPOSPrinter } from "../../utils/SmartPOSPrint"
+import { useEffect } from "react"
+import { usePrinter } from "../../hooks/Printer"
+import type { PrintData } from "../../types/CS30Printer"
 
 const OFFENSES = [
   { id: "1", name: "Speeding", fine: 3000 },
@@ -23,10 +25,12 @@ export default function ReceiptScreen() {
     payment: string
   }>()
 
+  const router = useRouter()
+  const printer = usePrinter()
+
   const selectedIds = selected ? selected.split(",") : []
   const selectedOffenses = OFFENSES.filter((o) => selectedIds.includes(o.id))
   const totalFine = selectedOffenses.reduce((sum, o) => sum + o.fine, 0)
-  const router = useRouter()
 
   const receiptData = {
     receiptNumber: `RCP${Date.now()}`,
@@ -50,9 +54,33 @@ export default function ReceiptScreen() {
     method: payment === "mpesa" ? "M-Pesa" : "Scan to Pay",
   }
 
+  // Debug printer status
+  useEffect(() => {
+    console.log("=== Printer Debug Info ===")
+    console.log("Printer available:", printer.isAvailable)
+    console.log("Printer initialized:", printer.isInitialized)
+    console.log("Printer loading:", printer.isLoading)
+    console.log("Printer error:", printer.error)
+    console.log("Printer status:", printer.status)
+
+    // Get initial status
+    if (printer.isAvailable && printer.isInitialized) {
+      printer.getStatus()
+    }
+  }, [printer.isInitialized])
+
   const handlePrint = async () => {
     try {
-      const printData = {
+      if (!printer.isAvailable) {
+        Alert.alert("Printer Error", "Printer is not available on this device")
+        return
+      }
+
+      if (printer.error) {
+        printer.clearError()
+      }
+
+      const printData: PrintData = {
         receiptData,
         selectedOffense: {
           name: selectedOffenses.map((o) => o.name).join(", "),
@@ -64,7 +92,7 @@ export default function ReceiptScreen() {
         offenderDetails,
       }
 
-      const success = await SmartPOSPrinter.printReceipt(printData)
+      const success = await printer.printReceipt(printData)
 
       if (success) {
         Alert.alert("Receipt Printed", "Receipt has been printed successfully", [
@@ -74,11 +102,77 @@ export default function ReceiptScreen() {
           },
         ])
       } else {
-        Alert.alert("Print Error", "Failed to print receipt. Please try again.")
+        Alert.alert("Print Error", printer.error || "Failed to print receipt")
       }
     } catch (error) {
       console.error("Print error:", error)
-      Alert.alert("Print Error", "Printer not connected or error occurred.")
+      Alert.alert("Print Error", "An error occurred while printing")
+    }
+  }
+
+  const handleTestPrint = async () => {
+    try {
+      if (!printer.isAvailable) {
+        Alert.alert("Printer Error", "Printer is not available on this device")
+        return
+      }
+
+      const testText = `
+TEST PRINT
+${new Date().toLocaleString()}
+
+Printer Status Test
+${printer.status?.statusText || 'Unknown'}
+
+This is a test print from the
+CS30 Printer Module.
+
+Thank you!
+`
+
+      const success = await printer.printText(testText)
+      
+      if (success) {
+        Alert.alert("Test Print", "Test print completed successfully!")
+      } else {
+        Alert.alert("Test Print Failed", printer.error || "Unknown error occurred")
+      }
+    } catch (error) {
+      console.error("Test print error:", error)
+      Alert.alert("Test Print Error", "Failed to execute test print")
+    }
+  }
+
+  const handleCheckStatus = async () => {
+    try {
+      await printer.getStatus()
+      
+      if (printer.status) {
+        const { statusText, isReady, isPaperOut } = printer.status
+        let message = `Status: ${statusText}\n`
+        message += `Ready: ${isReady ? 'Yes' : 'No'}\n`
+        message += `Paper: ${isPaperOut ? 'Out' : 'OK'}`
+        
+        Alert.alert("Printer Status", message)
+      } else {
+        Alert.alert("Status Error", "Could not get printer status")
+      }
+    } catch (error) {
+      Alert.alert("Status Error", "Failed to check printer status")
+    }
+  }
+
+  const handleInitialize = async () => {
+    try {
+      const success = await printer.initialize()
+      
+      if (success) {
+        Alert.alert("Initialization", "Printer initialized successfully!")
+      } else {
+        Alert.alert("Initialization Failed", printer.error || "Unknown error")
+      }
+    } catch (error) {
+      Alert.alert("Initialization Error", "Failed to initialize printer")
     }
   }
 
@@ -89,6 +183,27 @@ export default function ReceiptScreen() {
           <ThemedText type="title" style={styles.title}>
             Payment Receipt
           </ThemedText>
+
+          {/* Printer Status Section */}
+          <View style={styles.section}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Printer Status
+            </ThemedText>
+            <ThemedText type="default">
+              Available: {printer.isAvailable ? "Yes" : "No"}
+            </ThemedText>
+            <ThemedText type="default">
+              Initialized: {printer.isInitialized ? "Yes" : "No"}
+            </ThemedText>
+            <ThemedText type="default">
+              Status: {printer.status?.statusText || "Unknown"}
+            </ThemedText>
+            {printer.error && (
+              <ThemedText type="default" style={styles.errorText}>
+                Error: {printer.error}
+              </ThemedText>
+            )}
+          </View>
 
           <View style={styles.section}>
             <ThemedText type="subtitle" style={styles.sectionTitle}>
@@ -112,7 +227,7 @@ export default function ReceiptScreen() {
               Payment Details
             </ThemedText>
             <ThemedText type="default">Method: {payment === "mpesa" ? "M-Pesa" : "Scan to Pay"}</ThemedText>
-            <ThemedText type="default">Transaction ID: TXN{Date.now()}</ThemedText>
+            <ThemedText type="default">Transaction ID: {paymentDetails.transactionId}</ThemedText>
           </View>
 
           <View style={styles.section}>
@@ -157,15 +272,58 @@ export default function ReceiptScreen() {
           </View>
 
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.printButton} onPress={handlePrint}>
+            {/* Printer Management Buttons */}
+            <View style={styles.printerActions}>
+              <TouchableOpacity 
+                style={[styles.smallButton, styles.initButton]} 
+                onPress={handleInitialize}
+                disabled={printer.isLoading}
+              >
+                <ThemedText type="default" style={styles.smallButtonText}>
+                  🔧 Initialize
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.smallButton, styles.statusButton]} 
+                onPress={handleCheckStatus}
+                disabled={printer.isLoading}
+              >
+                <ThemedText type="default" style={styles.smallButtonText}>
+                  📊 Status
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {/* Test Print Button */}
+            <TouchableOpacity 
+              style={[styles.button, styles.testButton]} 
+              onPress={handleTestPrint}
+              disabled={printer.isLoading || !printer.isAvailable}
+            >
               <ThemedText type="default" style={styles.buttonText}>
-                🖨️ Print Receipt
+                {printer.isLoading ? "⏳ Processing..." : "🧪 Test Print"}
               </ThemedText>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.button, styles.newTransactionButton]} onPress={() => router.replace("/")}>
+            {/* Print Receipt Button */}
+            <TouchableOpacity 
+              style={[styles.button, styles.printButton]} 
+              onPress={handlePrint}
+              disabled={printer.isLoading || !printer.isAvailable || !printer.isInitialized}
+            >
               <ThemedText type="default" style={styles.buttonText}>
-                New Offense
+                {printer.isLoading ? "⏳ Printing..." : "🖨️ Print Receipt"}
+              </ThemedText>
+            </TouchableOpacity>
+
+            {/* New Transaction Button */}
+            <TouchableOpacity 
+              style={[styles.button, styles.newTransactionButton]} 
+              onPress={() => router.replace("/")}
+            >
+              <ThemedText type="default" style={styles.buttonText}>
+                ➕ New Offense
               </ThemedText>
             </TouchableOpacity>
           </View>
@@ -207,6 +365,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 18,
     fontWeight: "bold",
+  },
+  errorText: {
+    color: "#dc2626",
+    fontStyle: "italic",
   },
   offenseRow: {
     flexDirection: "row",
@@ -252,17 +414,32 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 16,
   },
+  printerActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
   button: {
-    backgroundColor: "#007bff",
     padding: 16,
     borderRadius: 8,
     alignItems: "center",
   },
-  printButton: {
-    backgroundColor: "#059669",
-    padding: 16,
+  smallButton: {
+    flex: 1,
+    padding: 12,
     borderRadius: 8,
     alignItems: "center",
+  },
+  initButton: {
+    backgroundColor: "#8b5cf6",
+  },
+  statusButton: {
+    backgroundColor: "#06b6d4",
+  },
+  testButton: {
+    backgroundColor: "#f59e0b",
+  },
+  printButton: {
+    backgroundColor: "#059669",
   },
   newTransactionButton: {
     backgroundColor: "#6b7280",
@@ -270,6 +447,11 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "bold",
+  },
+  smallButtonText: {
+    color: "#fff",
+    fontSize: 14,
     fontWeight: "bold",
   },
 })
